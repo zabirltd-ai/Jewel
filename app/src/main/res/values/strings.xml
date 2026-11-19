@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">LSL PO Manager</string>
+    <string name="company_full_name">LAILA STYLES LIMITED</string>
+    <string name="app_tagline">PO Transfer &amp; Breakdown Manager</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_upload_po">Upload New PO</string>
+    <string name="nav_po_transfer">PO Transfer</string>
+    <string name="nav_po_breakdown">PO Breakdown</string>
+    <string name="nav_saved_pos">Saved POs</string>
+    <string name="nav_excel_export">Excel Export</string>
+    <string name="nav_pdf_print">PDF &amp; Print</string>
+    <string name="nav_settings">Settings</string>
+    <string name="action_sign_in_google">Sign in with Google</string>
+    <string name="action_sign_out">Sign Out</string>
+    <string name="action_export_excel">Export Excel</string>
+    <string name="action_export_pdf">Export PDF</string>
+    <string name="action_print_po">Print PO</string>
+    <string name="action_save_po">Save PO</string>
+</resources>

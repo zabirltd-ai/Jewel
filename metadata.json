@@ -1,0 +1,6 @@
+{
+  "name": "LSL PO Manager",
+  "description": "PO Transfer & Breakdown Management application for Laila Styles Limited — upload buyer Excel/CSV POs, auto-parse and map columns, validate breakdowns, save to cloud, and export formatted Excel, PDF, and print reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

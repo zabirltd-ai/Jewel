@@ -1,0 +1,282 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable hardened security helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isValidStatus(status) {
+      return status in ['DRAFT', 'PENDING_VERIFICATION', 'VERIFIED', 'EXPORTED'];
+    }
+
+    function isValidFileFormat(format) {
+      return format in ['XLSX', 'XLS', 'CSV'];
+    }
+
+    function isValidAuditAction(action) {
+      return action in [
+        'UPLOADED',
+        'TRANSFERRED',
+        'EDITED',
+        'VERIFIED',
+        'EXPORTED_EXCEL',
+        'EXPORTED_PDF',
+        'PRINTED'
+      ];
+    }
+
+    function isValidPurchaseOrder(data, userId) {
+      return data.userId is string &&
+        data.userId == userId &&
+        data.userId.size() <= 128 &&
+        data.poNumber is string &&
+        data.poNumber.size() >= 1 &&
+        data.poNumber.size() <= 100 &&
+        data.buyerName is string &&
+        data.buyerName.size() >= 1 &&
+        data.buyerName.size() <= 150 &&
+        isOptionalString(data, 'poDate', 40) &&
+        isOptionalString(data, 'deliveryDate', 40) &&
+        isOptionalString(data, 'shipDate', 40) &&
+        isOptionalString(data, 'destination', 150) &&
+        isOptionalString(data, 'factoryInfo', 200) &&
+        isOptionalString(data, 'fabricDetails', 500) &&
+        data.currency is string &&
+        data.currency.size() >= 1 &&
+        data.currency.size() <= 12 &&
+        data.status is string &&
+        isValidStatus(data.status) &&
+        data.originalFileName is string &&
+        data.originalFileName.size() >= 1 &&
+        data.originalFileName.size() <= 255 &&
+        data.originalFileFormat is string &&
+        isValidFileFormat(data.originalFileFormat) &&
+        isOptionalString(data, 'originalSheetName', 120) &&
+        (!('originalHeaders' in data) || (data.originalHeaders is list && data.originalHeaders.size() <= 80 && (data.originalHeaders.size() == 0 || data.originalHeaders[0] is string))) &&
+        data.sizeColumns is list &&
+        data.sizeColumns.size() <= 40 &&
+        (data.sizeColumns.size() == 0 || data.sizeColumns[0] is string) &&
+        data.lineItems is list &&
+        data.lineItems.size() <= 250 &&
+        (data.lineItems.size() == 0 || data.lineItems[0] is map) &&
+        data.validationWarnings is list &&
+        data.validationWarnings.size() <= 200 &&
+        (data.validationWarnings.size() == 0 || data.validationWarnings[0] is map) &&
+        data.totalQuantity is int &&
+        data.totalQuantity >= 0 &&
+        data.totalQuantity <= 100000000 &&
+        (data.totalValue is number) &&
+        data.totalValue >= 0 &&
+        data.styleCount is int &&
+        data.styleCount >= 0 &&
+        data.styleCount <= 10000 &&
+        data.colorCount is int &&
+        data.colorCount >= 0 &&
+        data.colorCount <= 10000 &&
+        data.warningCount is int &&
+        data.warningCount >= 0 &&
+        data.warningCount <= 10000 &&
+        isOptionalString(data, 'notes', 1000) &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidOriginalSource(data, userId, poId) {
+      return data.userId is string &&
+        data.userId == userId &&
+        data.userId.size() <= 128 &&
+        data.poId is string &&
+        data.poId == poId &&
+        data.poId.size() <= 128 &&
+        data.fileName is string &&
+        data.fileName.size() >= 1 &&
+        data.fileName.size() <= 255 &&
+        data.fileFormat is string &&
+        isValidFileFormat(data.fileFormat) &&
+        isOptionalString(data, 'sheetName', 120) &&
+        data.headers is list &&
+        data.headers.size() <= 80 &&
+        (data.headers.size() == 0 || data.headers[0] is string) &&
+        data.rowCount is int &&
+        data.rowCount >= 0 &&
+        data.rowCount <= 50000 &&
+        data.rows is list &&
+        data.rows.size() <= 500 &&
+        (data.rows.size() == 0 || data.rows[0] is map) &&
+        data.columnMapping is map &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidAuditLog(data, userId, poId) {
+      return data.userId is string &&
+        data.userId == userId &&
+        data.userId.size() <= 128 &&
+        data.poId is string &&
+        data.poId == poId &&
+        data.poId.size() <= 128 &&
+        data.action is string &&
+        isValidAuditAction(data.action) &&
+        data.summary is string &&
+        data.summary.size() >= 1 &&
+        data.summary.size() <= 500 &&
+        isOptionalString(data, 'actorName', 150) &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidMerchandiserSettings(data, userId) {
+      return data.userId is string &&
+        data.userId == userId &&
+        data.userId.size() <= 128 &&
+        data.companyName is string &&
+        data.companyName.size() >= 1 &&
+        data.companyName.size() <= 120 &&
+        data.defaultCurrency is string &&
+        data.defaultCurrency.size() >= 1 &&
+        data.defaultCurrency.size() <= 12 &&
+        isOptionalString(data, 'defaultFactory', 150) &&
+        data.strictValidation is bool &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    match /users/{userId}/purchase_orders/{poId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(poId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(poId) &&
+        incoming().keys().hasAll([
+          'userId', 'poNumber', 'buyerName', 'currency', 'status',
+          'originalFileName', 'originalFileFormat', 'sizeColumns',
+          'lineItems', 'validationWarnings', 'totalQuantity', 'totalValue',
+          'styleCount', 'colorCount', 'warningCount', 'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'poNumber', 'buyerName', 'poDate', 'deliveryDate',
+          'shipDate', 'destination', 'factoryInfo', 'fabricDetails',
+          'currency', 'status', 'originalFileName', 'originalFileFormat',
+          'originalSheetName', 'originalHeaders', 'sizeColumns', 'lineItems',
+          'validationWarnings', 'totalQuantity', 'totalValue', 'styleCount',
+          'colorCount', 'warningCount', 'notes', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidPurchaseOrder(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(poId) &&
+        isValidPurchaseOrder(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().originalFileName == existing().originalFileName &&
+        incoming().originalFileFormat == existing().originalFileFormat &&
+        (
+          // Action 1: Merchandiser edit & recalculation of converted PO breakdown
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'poNumber', 'buyerName', 'poDate', 'deliveryDate', 'shipDate',
+            'destination', 'factoryInfo', 'fabricDetails', 'currency',
+            'status', 'sizeColumns', 'lineItems', 'validationWarnings',
+            'totalQuantity', 'totalValue', 'styleCount', 'colorCount',
+            'warningCount', 'notes', 'updatedAt'
+          ]) ||
+          // Action 2: Status transition (verify / mark exported)
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        );
+
+      allow delete: if isOwner(userId) && isValidId(poId);
+
+      // Immutable original buyer source rows (never overwritten)
+      match /original_source/{sourceId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(poId) && isValidId(sourceId);
+        allow create: if isOwner(userId) &&
+          isValidId(poId) &&
+          isValidId(sourceId) &&
+          incoming().keys().hasAll([
+            'userId', 'poId', 'fileName', 'fileFormat', 'headers',
+            'rowCount', 'rows', 'columnMapping', 'createdAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'poId', 'fileName', 'fileFormat', 'sheetName',
+            'headers', 'rowCount', 'rows', 'columnMapping', 'createdAt'
+          ]) &&
+          isValidOriginalSource(incoming(), userId, poId) &&
+          existsAfter(/databases/$(database)/documents/users/$(userId)/purchase_orders/$(poId));
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(poId) && isValidId(sourceId);
+      }
+
+      // Append-only immutable audit history
+      match /audit_logs/{logId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(poId) && isValidId(logId);
+        allow create: if isOwner(userId) &&
+          isValidId(poId) &&
+          isValidId(logId) &&
+          incoming().keys().hasAll(['userId', 'poId', 'action', 'summary', 'createdAt']) &&
+          incoming().keys().hasOnly(['userId', 'poId', 'action', 'summary', 'actorName', 'createdAt']) &&
+          isValidAuditLog(incoming(), userId, poId) &&
+          existsAfter(/databases/$(database)/documents/users/$(userId)/purchase_orders/$(poId));
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(poId) && isValidId(logId);
+      }
+    }
+
+    match /users/{userId}/settings/{settingId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(settingId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(settingId) &&
+        incoming().keys().hasAll([
+          'userId', 'companyName', 'defaultCurrency', 'strictValidation', 'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'companyName', 'defaultCurrency', 'defaultFactory',
+          'strictValidation', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidMerchandiserSettings(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(settingId) &&
+        isValidMerchandiserSettings(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'companyName', 'defaultCurrency', 'defaultFactory', 'strictValidation', 'updatedAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(settingId);
+    }
+  }
+}

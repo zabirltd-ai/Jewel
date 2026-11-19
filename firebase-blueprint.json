@@ -1,0 +1,303 @@
+{
+  "entities": {
+    "PurchaseOrder": {
+      "title": "PurchaseOrder",
+      "description": "Standardized LSL Purchase Order record converted from an uploaded buyer Excel/CSV file, containing summary metadata, style/size/color/delivery line items, and validation warnings.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "poNumber": {
+          "type": "string",
+          "description": "Buyer Purchase Order number."
+        },
+        "buyerName": {
+          "type": "string",
+          "description": "Buyer or brand name."
+        },
+        "poDate": {
+          "type": "string",
+          "description": "PO issue date."
+        },
+        "deliveryDate": {
+          "type": "string",
+          "description": "Primary delivery date."
+        },
+        "shipDate": {
+          "type": "string",
+          "description": "Primary shipment date."
+        },
+        "destination": {
+          "type": "string",
+          "description": "Primary destination port or country."
+        },
+        "factoryInfo": {
+          "type": "string",
+          "description": "Assigned factory or production unit details."
+        },
+        "fabricDetails": {
+          "type": "string",
+          "description": "Fabric composition and trim remarks."
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code (e.g., USD, EUR, GBP)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["DRAFT", "PENDING_VERIFICATION", "VERIFIED", "EXPORTED"],
+          "description": "Workflow verification status of the PO."
+        },
+        "originalFileName": {
+          "type": "string",
+          "description": "Immutable filename of the original uploaded buyer file."
+        },
+        "originalFileFormat": {
+          "type": "string",
+          "enum": ["XLSX", "XLS", "CSV"],
+          "description": "Immutable file format of the original buyer PO."
+        },
+        "originalSheetName": {
+          "type": "string",
+          "description": "Worksheet name parsed from the uploaded workbook."
+        },
+        "originalHeaders": {
+          "type": "array",
+          "description": "Original column headers detected in the buyer file."
+        },
+        "sizeColumns": {
+          "type": "array",
+          "description": "Dynamic ordered list of size column headers for this PO."
+        },
+        "lineItems": {
+          "type": "array",
+          "description": "Converted LSL style/color/size/delivery line items."
+        },
+        "validationWarnings": {
+          "type": "array",
+          "description": "Validation issues and mismatch warnings detected."
+        },
+        "totalQuantity": {
+          "type": "integer",
+          "description": "Calculated total PO garment quantity."
+        },
+        "totalValue": {
+          "type": "number",
+          "description": "Calculated total PO monetary value."
+        },
+        "styleCount": {
+          "type": "integer",
+          "description": "Count of distinct styles in this PO."
+        },
+        "colorCount": {
+          "type": "integer",
+          "description": "Count of distinct colors in this PO."
+        },
+        "warningCount": {
+          "type": "integer",
+          "description": "Count of active validation warnings."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Merchandiser remarks."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when uploaded (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "poNumber",
+        "buyerName",
+        "currency",
+        "status",
+        "originalFileName",
+        "originalFileFormat",
+        "sizeColumns",
+        "lineItems",
+        "validationWarnings",
+        "totalQuantity",
+        "totalValue",
+        "styleCount",
+        "colorCount",
+        "warningCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OriginalSource": {
+      "title": "OriginalSource",
+      "description": "Immutable snapshot of original buyer spreadsheet headers, column mapping, and raw rows kept separate from converted LSL records.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "poId": {
+          "type": "string",
+          "description": "Parent PurchaseOrder document ID."
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Original uploaded file name."
+        },
+        "fileFormat": {
+          "type": "string",
+          "enum": ["XLSX", "XLS", "CSV"],
+          "description": "Original uploaded file format."
+        },
+        "sheetName": {
+          "type": "string",
+          "description": "Parsed sheet name."
+        },
+        "headers": {
+          "type": "array",
+          "description": "Original header row cells."
+        },
+        "rowCount": {
+          "type": "integer",
+          "description": "Total number of raw buyer rows parsed."
+        },
+        "rows": {
+          "type": "array",
+          "description": "Preserved raw rows as list of {rowIndex, cells} maps."
+        },
+        "columnMapping": {
+          "type": "object",
+          "description": "Column mapping snapshot used during transfer."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when stored (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "poId",
+        "fileName",
+        "fileFormat",
+        "headers",
+        "rowCount",
+        "rows",
+        "columnMapping",
+        "createdAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable audit trail entry recording PO upload, transfer, edit, verification, export, and print actions.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "poId": {
+          "type": "string",
+          "description": "Parent PurchaseOrder document ID."
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "UPLOADED",
+            "TRANSFERRED",
+            "EDITED",
+            "VERIFIED",
+            "EXPORTED_EXCEL",
+            "EXPORTED_PDF",
+            "PRINTED"
+          ],
+          "description": "Audit event action type."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable description of the change."
+        },
+        "actorName": {
+          "type": "string",
+          "description": "Display name or email of the merchandiser."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the audit event (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "poId", "action", "summary", "createdAt"]
+    },
+    "MerchandiserSettings": {
+      "title": "MerchandiserSettings",
+      "description": "User-scoped corporate merchandising preferences for Laila Styles Limited.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Header organization title used in exports."
+        },
+        "defaultCurrency": {
+          "type": "string",
+          "description": "Default fallback currency code."
+        },
+        "defaultFactory": {
+          "type": "string",
+          "description": "Default factory unit label."
+        },
+        "strictValidation": {
+          "type": "boolean",
+          "description": "Highlight all mismatch warnings before verification."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "companyName",
+        "defaultCurrency",
+        "strictValidation",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/purchase_orders/{poId}": {
+      "schema": { "$ref": "#/entities/PurchaseOrder" },
+      "description": "User-scoped standardized LSL Purchase Order records."
+    },
+    "/users/{userId}/purchase_orders/{poId}/original_source/{sourceId}": {
+      "schema": { "$ref": "#/entities/OriginalSource" },
+      "description": "Immutable preserved original buyer spreadsheet rows and mapping."
+    },
+    "/users/{userId}/purchase_orders/{poId}/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable audit trail entries for a Purchase Order."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/MerchandiserSettings" },
+      "description": "User-scoped LSL merchandising configuration."
+    }
+  }
+}
