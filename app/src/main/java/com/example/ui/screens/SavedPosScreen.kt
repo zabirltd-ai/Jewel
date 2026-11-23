@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,17 +57,21 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.engine.PoTransferEngine
 import com.example.model.AppDestination
 import com.example.model.PoStatus
 import com.example.model.PurchaseOrderRecord
 import com.example.model.UiState
 import com.example.ui.components.EmptyPoWorkspaceCard
+import com.example.ui.components.ExcelStyleDataTable
 import com.example.ui.components.PoStatusBadge
+import com.example.ui.components.ValidationSummaryCard
 import com.example.ui.components.formatCurrency
 import com.example.ui.components.formatInt
 import com.example.ui.components.formatTimestamp
 import com.example.ui.theme.LslErrorText
 import com.example.ui.theme.LslForestGreen
+import com.example.ui.theme.LslMintBorder
 import com.example.ui.theme.LslMintTint
 import com.example.ui.theme.LslWarningBg
 import com.example.ui.theme.LslWarningText
@@ -82,6 +87,7 @@ private enum class DateRangeFilter(val label: String, val days: Long?) {
 @Composable
 fun SavedPosScreen(
     savedPosState: UiState<List<PurchaseOrderRecord>>,
+    isLaptopScreen: Boolean = false,
     onUploadNewPo: () -> Unit,
     onOpenPo: (PurchaseOrderRecord, AppDestination) -> Unit,
     onDeletePo: (PurchaseOrderRecord) -> Unit
@@ -90,6 +96,7 @@ fun SavedPosScreen(
     var statusFilter by remember { mutableStateOf<PoStatus?>(null) }
     var dateFilter by remember { mutableStateOf(DateRangeFilter.ALL) }
     var poPendingDelete by remember { mutableStateOf<PurchaseOrderRecord?>(null) }
+    var selectedInspectId by remember { mutableStateOf<String?>(null) }
 
     poPendingDelete?.let { target ->
         AlertDialog(
@@ -147,124 +154,274 @@ fun SavedPosScreen(
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Search & Filters Card
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = { Text("Search by PO Number, Buyer, or Style Number…") },
-                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = "Search POs") },
-                                trailingIcon = {
-                                    if (searchQuery.isNotBlank()) {
-                                        IconButton(onClick = { searchQuery = "" }) {
-                                            Icon(Icons.Outlined.Clear, contentDescription = "Clear search")
-                                        }
-                                    }
-                                },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("saved_pos_search_input")
-                            )
+            val inspectedPo = remember(filtered, selectedInspectId) {
+                filtered.firstOrNull { it.id == selectedInspectId } ?: filtered.firstOrNull()
+            }
 
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(
-                                    selected = statusFilter == null,
-                                    onClick = { statusFilter = null },
-                                    label = { Text("All (${allPos.size})") },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = LslMintTint,
-                                        selectedLabelColor = LslForestGreen
-                                    )
-                                )
-                                PoStatus.entries.forEach { st ->
-                                    FilterChip(
-                                        selected = statusFilter == st,
-                                        onClick = { statusFilter = if (statusFilter == st) null else st },
-                                        label = { Text(st.label) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = LslMintTint,
-                                            selectedLabelColor = LslForestGreen
-                                        )
-                                    )
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                DateRangeFilter.entries.forEach { df ->
-                                    FilterChip(
-                                        selected = dateFilter == df,
-                                        onClick = { dateFilter = df },
-                                        label = { Text(df.label) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = LslMintTint,
-                                            selectedLabelColor = LslForestGreen
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (allPos.isEmpty()) {
-                    item {
-                        EmptyPoWorkspaceCard(
-                            title = "Permanent PO Database Is Empty",
-                            subtitle = "Uploaded and saved Purchase Orders will be stored permanently here with full search, editing, and re-export support.",
-                            primaryActionLabel = "Upload Buyer PO",
-                            onPrimaryAction = onUploadNewPo
-                        )
-                    }
-                } else if (filtered.isEmpty()) {
+            val listPane: @Composable (Modifier) -> Unit = { listMod ->
+                LazyColumn(
+                    modifier = listMod,
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                         ) {
-                            Text(
-                                text = "No saved POs match your current search or filters.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(20.dp)
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    placeholder = { Text("Search by PO Number, Buyer, or Style Number…") },
+                                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = "Search POs") },
+                                    trailingIcon = {
+                                        if (searchQuery.isNotBlank()) {
+                                            IconButton(onClick = { searchQuery = "" }) {
+                                                Icon(Icons.Outlined.Clear, contentDescription = "Clear search")
+                                            }
+                                        }
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("saved_pos_search_input")
+                                )
+
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    FilterChip(
+                                        selected = statusFilter == null,
+                                        onClick = { statusFilter = null },
+                                        label = { Text("All (${allPos.size})") },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = LslMintTint,
+                                            selectedLabelColor = LslForestGreen
+                                        )
+                                    )
+                                    PoStatus.entries.forEach { st ->
+                                        FilterChip(
+                                            selected = statusFilter == st,
+                                            onClick = { statusFilter = if (statusFilter == st) null else st },
+                                            label = { Text(st.label) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = LslMintTint,
+                                                selectedLabelColor = LslForestGreen
+                                            )
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    DateRangeFilter.entries.forEach { df ->
+                                        FilterChip(
+                                            selected = dateFilter == df,
+                                            onClick = { dateFilter = df },
+                                            label = { Text(df.label) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = LslMintTint,
+                                                selectedLabelColor = LslForestGreen
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (allPos.isEmpty()) {
+                        item {
+                            EmptyPoWorkspaceCard(
+                                title = "Permanent PO Database Is Empty",
+                                subtitle = "Uploaded and saved Purchase Orders will be stored permanently here with full search, editing, and re-export support.",
+                                primaryActionLabel = "Upload Buyer PO",
+                                onPrimaryAction = onUploadNewPo
+                            )
+                        }
+                    } else if (filtered.isEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Text(
+                                    text = "No saved POs match your current search or filters.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(20.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        items(filtered, key = { it.id }) { po ->
+                            val isDuplicatePo = (poNumberCounts[po.poNumber.trim().lowercase()] ?: 0) > 1
+                            val isSelected = isLaptopScreen && inspectedPo?.id == po.id
+                            SavedPoRecordCard(
+                                po = po,
+                                isDuplicatePo = isDuplicatePo,
+                                isSelected = isSelected,
+                                onSelectCard = {
+                                    if (isLaptopScreen) selectedInspectId = po.id
+                                    else onOpenPo(po, AppDestination.PO_BREAKDOWN)
+                                },
+                                onOpenBreakdown = { onOpenPo(po, AppDestination.PO_BREAKDOWN) },
+                                onEdit = { onOpenPo(po, AppDestination.PO_TRANSFER) },
+                                onExportExcel = { onOpenPo(po, AppDestination.EXCEL_EXPORT) },
+                                onExportPdfPrint = { onOpenPo(po, AppDestination.PDF_PRINT) },
+                                onDelete = { poPendingDelete = po }
                             )
                         }
                     }
-                } else {
-                    items(filtered, key = { it.id }) { po ->
-                        val isDuplicatePo = (poNumberCounts[po.poNumber.trim().lowercase()] ?: 0) > 1
-                        SavedPoRecordCard(
-                            po = po,
-                            isDuplicatePo = isDuplicatePo,
-                            onOpenBreakdown = { onOpenPo(po, AppDestination.PO_BREAKDOWN) },
-                            onEdit = { onOpenPo(po, AppDestination.PO_TRANSFER) },
-                            onExportExcel = { onOpenPo(po, AppDestination.EXCEL_EXPORT) },
-                            onExportPdfPrint = { onOpenPo(po, AppDestination.PDF_PRINT) },
-                            onDelete = { poPendingDelete = po }
-                        )
+
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+            }
+
+            if (isLaptopScreen && inspectedPo != null) {
+                // Laptop Master-Detail Split View
+                Row(modifier = Modifier.fillMaxSize()) {
+                    listPane(
+                        Modifier
+                            .weight(0.45f)
+                            .fillMaxHeight()
+                    )
+                    LaptopPoInspectorPane(
+                        po = inspectedPo,
+                        onOpenBreakdown = { onOpenPo(inspectedPo, AppDestination.PO_BREAKDOWN) },
+                        onEdit = { onOpenPo(inspectedPo, AppDestination.PO_TRANSFER) },
+                        onExportExcel = { onOpenPo(inspectedPo, AppDestination.EXCEL_EXPORT) },
+                        onExportPdfPrint = { onOpenPo(inspectedPo, AppDestination.PDF_PRINT) },
+                        modifier = Modifier
+                            .weight(0.55f)
+                            .fillMaxHeight()
+                    )
+                }
+            } else {
+                listPane(Modifier.fillMaxSize())
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LaptopPoInspectorPane(
+    po: PurchaseOrderRecord,
+    onOpenBreakdown: () -> Unit,
+    onEdit: () -> Unit,
+    onExportExcel: () -> Unit,
+    onExportPdfPrint: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val styles = remember(po) { PoTransferEngine.computeStyleBreakdown(po) }
+    val sizeTotals = remember(po) { PoTransferEngine.computeSizeColumnTotals(po) }
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(top = 16.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "PO ${po.poNumber}",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontFamily = MonoNumericStyle.fontFamily,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = LslForestGreen
+                            )
+                            Text(
+                                text = "${po.buyerName}  •  Delivery: ${po.deliveryDate.ifBlank { "-" }}  •  ${po.destination.ifBlank { "-" }}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        PoStatusBadge(status = po.status)
+                    }
+
+                    Text(
+                        text = "Total Qty: ${formatInt(po.totalQuantity)} pcs  •  Styles: ${po.styleCount}  •  Colors: ${po.colorCount}  •  Value: ${formatCurrency(po.currency, po.totalValue)}",
+                        style = MonoNumericStyle.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = onOpenBreakdown,
+                            colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
+                        ) { Text("Full 5-Tab Breakdown") }
+                        OutlinedButton(onClick = onEdit) { Text("Edit PO") }
+                        OutlinedButton(onClick = onExportExcel) { Text("Export Excel") }
+                        OutlinedButton(onClick = onExportPdfPrint) { Text("PDF & Print") }
                     }
                 }
+            }
+        }
 
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+        item {
+            ValidationSummaryCard(warnings = po.validationWarnings, maxVisible = 4)
+        }
+
+        item {
+            Text("Style Breakdown Snapshot", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(6.dp))
+            ExcelStyleDataTable(
+                headers = listOf("Style", "Description", "Colors", "Qty", "Value"),
+                rows = styles.map {
+                    listOf(
+                        it.styleNumber,
+                        it.description,
+                        it.colors,
+                        formatInt(it.poQuantity),
+                        formatCurrency(po.currency, it.totalValue)
+                    )
+                },
+                columnWidths = listOf(100.dp, 150.dp, 120.dp, 82.dp, 110.dp),
+                rightAlignedColumns = setOf(3, 4),
+                totalRow = listOf("TOTAL", "${styles.size} Styles", "", formatInt(po.totalQuantity), formatCurrency(po.currency, po.totalValue))
+            )
+        }
+
+        if (po.sizeColumns.isNotEmpty()) {
+            item {
+                Text("Size Distribution Snapshot", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(6.dp))
+                val headers = listOf("Style", "Color") + po.sizeColumns + listOf("Total")
+                val widths = listOf(100.dp, 100.dp) + po.sizeColumns.map { 62.dp } + listOf(82.dp)
+                ExcelStyleDataTable(
+                    headers = headers,
+                    rows = po.lineItems.take(15).map { line ->
+                        listOf(line.styleNumber, line.color) +
+                            po.sizeColumns.map { sz -> formatInt(line.sizeQuantities[sz] ?: 0L) } +
+                            listOf(formatInt(line.effectiveQty))
+                    },
+                    columnWidths = widths,
+                    rightAlignedColumns = (2..headers.lastIndex).toSet(),
+                    totalRow = listOf("TOTAL", "${po.lineItems.size} lines") +
+                        po.sizeColumns.map { sz -> formatInt(sizeTotals[sz] ?: 0L) } +
+                        listOf(formatInt(po.totalQuantity))
+                )
             }
         }
     }
@@ -275,6 +432,8 @@ fun SavedPosScreen(
 private fun SavedPoRecordCard(
     po: PurchaseOrderRecord,
     isDuplicatePo: Boolean,
+    isSelected: Boolean,
+    onSelectCard: () -> Unit,
     onOpenBreakdown: () -> Unit,
     onEdit: () -> Unit,
     onExportExcel: () -> Unit,
@@ -284,11 +443,16 @@ private fun SavedPoRecordCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpenBreakdown)
+            .clickable(onClick = onSelectCard)
             .testTag("saved_po_card_${po.poNumber}"),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) LslMintTint.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) LslForestGreen else MaterialTheme.colorScheme.outline
+        )
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(

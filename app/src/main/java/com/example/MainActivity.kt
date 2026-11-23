@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,11 +22,13 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.FolderCopy
 import androidx.compose.material.icons.outlined.GridOn
+import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Settings
@@ -48,9 +51,12 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.PermanentDrawerSheet
+import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -61,8 +67,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -89,9 +102,11 @@ import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.UploadPoScreen
 import com.example.ui.theme.LslForestGreen
 import com.example.ui.theme.LslForestGreenDark
+import com.example.ui.theme.LslMintBorder
 import com.example.ui.theme.LslMintTint
 import com.example.ui.theme.LslPoManagerTheme
 import com.example.ui.theme.LslPureWhite
+import com.example.ui.theme.MonoNumericStyle
 import com.example.viewmodel.LslPoViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
@@ -195,7 +210,41 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    // Laptop & Desktop Hardware Keyboard Shortcuts (Ctrl+U, Ctrl+S, Ctrl+E, Ctrl+P, Ctrl+1..8)
+    val keyboardShortcutModifier = Modifier.onPreviewKeyEvent { keyEvent ->
+        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.isCtrlPressed) {
+            when (keyEvent.key) {
+                Key.U -> { viewModel.navigateTo(AppDestination.UPLOAD_PO); true }
+                Key.S -> {
+                    if (activePoState.po != null) {
+                        viewModel.requestSaveActivePo(markVerified = false, forceDuplicateSave = false)
+                        true
+                    } else false
+                }
+                Key.E -> { viewModel.navigateTo(AppDestination.EXCEL_EXPORT); true }
+                Key.P -> { viewModel.navigateTo(AppDestination.PDF_PRINT); true }
+                Key.One -> { viewModel.navigateTo(AppDestination.DASHBOARD); true }
+                Key.Two -> { viewModel.navigateTo(AppDestination.UPLOAD_PO); true }
+                Key.Three -> { viewModel.navigateTo(AppDestination.PO_TRANSFER); true }
+                Key.Four -> { viewModel.navigateTo(AppDestination.PO_BREAKDOWN); true }
+                Key.Five -> { viewModel.navigateTo(AppDestination.SAVED_POS); true }
+                Key.Six -> { viewModel.navigateTo(AppDestination.EXCEL_EXPORT); true }
+                Key.Seven -> { viewModel.navigateTo(AppDestination.PDF_PRINT); true }
+                Key.Eight -> { viewModel.navigateTo(AppDestination.SETTINGS); true }
+                else -> false
+            }
+        } else {
+            false
+        }
+    }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(keyboardShortcutModifier)
+    ) {
+        val isLaptopScreen = maxWidth >= 1024.dp
+        val isTabletScreen = maxWidth >= 720.dp && !isLaptopScreen
         val isWideScreen = maxWidth >= 720.dp
 
         val mainContent: @Composable (Modifier) -> Unit = { contentModifier ->
@@ -216,6 +265,7 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
 
                     AppDestination.UPLOAD_PO -> UploadPoScreen(
                         uploadState = uploadState,
+                        isLaptopScreen = isLaptopScreen,
                         onParseFile = { name, provider -> viewModel.parseUploadedFile(name, provider) },
                         onSelectSheet = { viewModel.selectUploadSheet(it) },
                         onUpdateHeaderRow = { viewModel.updateHeaderRowIndex(it) },
@@ -261,6 +311,7 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
 
                     AppDestination.SAVED_POS -> SavedPosScreen(
                         savedPosState = savedPosState,
+                        isLaptopScreen = isLaptopScreen,
                         onUploadNewPo = { viewModel.navigateTo(AppDestination.UPLOAD_PO) },
                         onOpenPo = { po, target -> viewModel.openSavedPo(po, target) },
                         onDeletePo = { viewModel.deleteSavedPo(it) }
@@ -279,6 +330,7 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
                     AppDestination.PDF_PRINT -> PdfPrintScreen(
                         activeState = activePoState,
                         companyName = settings.companyName,
+                        isLaptopScreen = isLaptopScreen,
                         onGoToUpload = { viewModel.navigateTo(AppDestination.UPLOAD_PO) },
                         onGoToSavedPos = { viewModel.navigateTo(AppDestination.SAVED_POS) },
                         onSavePo = { viewModel.requestSaveActivePo(false, false) },
@@ -299,146 +351,178 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
             }
         }
 
-        if (isWideScreen) {
-            // Tablet / Desktop Expanded Canonical Layout with Side NavigationRail (all 8 sections)
-            Scaffold(
-                snackbarHost = { SnackbarHost(snackbarHostState) },
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Column {
+        when {
+            isLaptopScreen -> {
+                // Laptop / Chromebook / DeX Full Desktop Layout: Permanent Sidebar + Widescreen Workspace
+                PermanentNavigationDrawer(
+                    drawerContent = {
+                        PermanentDrawerSheet(
+                            modifier = Modifier.width(272.dp),
+                            drawerContainerColor = MaterialTheme.colorScheme.surface
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(LslForestGreenDark)
+                                    .padding(horizontal = 20.dp, vertical = 22.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 Text(
-                                    text = currentDestination.title,
-                                    style = MaterialTheme.typography.titleLarge,
+                                    text = settings.companyName.uppercase(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = LslPureWhite.copy(alpha = 0.8f)
+                                )
+                                Text(
+                                    text = "LSL PO Manager",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = LslPureWhite
+                                )
+                                Text(
+                                    text = user.email ?: "Laptop Merchandiser Mode",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = LslPureWhite.copy(alpha = 0.78f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Text(
-                                    text = settings.companyName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = LslPureWhite.copy(alpha = 0.8f)
-                                )
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = LslForestGreen,
-                            titleContentColor = LslPureWhite
-                        )
-                    )
-                }
-            ) { innerPadding ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    NavigationRail(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(vertical = 8.dp)
-                    ) {
-                        AppDestination.entries.forEach { dest ->
-                            val selected = currentDestination == dest
-                            NavigationRailItem(
-                                selected = selected,
-                                onClick = { viewModel.navigateTo(dest) },
-                                icon = {
-                                    Icon(destinationIcon(dest), contentDescription = dest.title)
-                                },
-                                label = { Text(dest.shortTitle, maxLines = 1) },
-                                colors = NavigationRailItemDefaults.colors(
-                                    selectedIconColor = LslForestGreen,
-                                    selectedTextColor = LslForestGreen,
-                                    indicatorColor = LslMintTint
-                                ),
-                                modifier = Modifier.testTag("nav_rail_${dest.name.lowercase()}")
-                            )
-                        }
-                    }
-                    mainContent(Modifier.weight(1f))
-                }
-            }
-        } else {
-            // Compact Mobile Layout: ModalNavigationDrawer (all 8 menu items) + Bottom NavigationBar
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = {
-                    ModalDrawerSheet(
-                        modifier = Modifier.width(290.dp),
-                        drawerContainerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(LslForestGreenDark)
-                                .padding(horizontal = 20.dp, vertical = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = settings.companyName.uppercase(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = LslPureWhite.copy(alpha = 0.8f)
-                            )
-                            Text(
-                                text = "LSL PO Manager",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = LslPureWhite
-                            )
-                            Text(
-                                text = user.email ?: "Merchandiser Workspace",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = LslPureWhite.copy(alpha = 0.75f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            AppDestination.entries.forEachIndexed { idx, dest ->
-                                val selected = currentDestination == dest
-                                NavigationDrawerItem(
-                                    label = { Text("${idx + 1}. ${dest.title}") },
-                                    selected = selected,
-                                    onClick = {
-                                        viewModel.navigateTo(dest)
-                                        scope.launch { drawerState.close() }
-                                    },
-                                    icon = { Icon(destinationIcon(dest), contentDescription = dest.title) },
-                                    colors = NavigationDrawerItemDefaults.colors(
-                                        selectedContainerColor = LslMintTint,
-                                        selectedIconColor = LslForestGreen,
-                                        selectedTextColor = LslForestGreen
-                                    ),
-                                    modifier = Modifier
-                                        .padding(horizontal = 12.dp, vertical = 2.dp)
-                                        .testTag("drawer_nav_${dest.name.lowercase()}")
-                                )
-                                if (idx == 4) {
-                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                AppDestination.entries.forEachIndexed { idx, dest ->
+                                    val selected = currentDestination == dest
+                                    NavigationDrawerItem(
+                                        label = {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("${idx + 1}. ${dest.title}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(
+                                                    text = "Ctrl+${idx + 1}",
+                                                    style = MonoNumericStyle,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                                                )
+                                            }
+                                        },
+                                        selected = selected,
+                                        onClick = { viewModel.navigateTo(dest) },
+                                        icon = { Icon(destinationIcon(dest), contentDescription = dest.title) },
+                                        colors = NavigationDrawerItemDefaults.colors(
+                                            selectedContainerColor = LslMintTint,
+                                            selectedIconColor = LslForestGreen,
+                                            selectedTextColor = LslForestGreen
+                                        ),
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 2.dp)
+                                            .testTag("laptop_nav_${dest.name.lowercase()}")
+                                    )
+                                    if (idx == 4) {
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                                    }
+                                }
+                            }
+
+                            // Active PO Pill & Keyboard Shortcuts Footer
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                activePoState.po?.let { active ->
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = LslMintTint,
+                                        border = BorderStroke(1.dp, LslMintBorder),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text("ACTIVE WORKSPACE PO", style = MaterialTheme.typography.labelSmall, color = LslForestGreen)
+                                            Text(
+                                                text = "${active.poNumber} • ${active.buyerName}",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = LslForestGreenDark,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.Keyboard, contentDescription = "Keyboard shortcuts", tint = LslForestGreen)
+                                        Text(
+                                            text = "Ctrl+U Upload • Ctrl+S Save\nCtrl+E Excel • Ctrl+P Print",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                ) {
+                    Scaffold(
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        topBar = {
+                            TopAppBar(
+                                title = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = currentDestination.title,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        activePoState.po?.let { active ->
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = LslPureWhite.copy(alpha = 0.16f)
+                                            ) {
+                                                Text(
+                                                    text = "PO: ${active.poNumber}",
+                                                    style = MonoNumericStyle,
+                                                    color = LslPureWhite,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = LslForestGreen,
+                                    titleContentColor = LslPureWhite
+                                )
+                            )
+                        }
+                    ) { innerPadding ->
+                        mainContent(Modifier.padding(innerPadding))
+                    }
                 }
-            ) {
+            }
+
+            isTabletScreen -> {
+                // Tablet Medium Layout: Side NavigationRail (all 8 sections)
                 Scaffold(
                     snackbarHost = { SnackbarHost(snackbarHostState) },
                     topBar = {
                         TopAppBar(
-                            navigationIcon = {
-                                IconButton(
-                                    onClick = { scope.launch { drawerState.open() } },
-                                    modifier = Modifier.testTag("open_navigation_drawer_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Menu,
-                                        contentDescription = "Open LSL Navigation Menu",
-                                        tint = LslPureWhite
-                                    )
-                                }
-                            },
                             title = {
                                 Column {
                                     Text(
@@ -450,7 +534,7 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
                                     Text(
                                         text = settings.companyName,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = LslPureWhite.copy(alpha = 0.82f)
+                                        color = LslPureWhite.copy(alpha = 0.8f)
                                     )
                                 }
                             },
@@ -459,31 +543,166 @@ private fun LslAuthenticatedWorkspace(user: FirebaseUser) {
                                 titleContentColor = LslPureWhite
                             )
                         )
-                    },
-                    bottomBar = {
-                        NavigationBar(
+                    }
+                ) { innerPadding ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        NavigationRail(
                             containerColor = MaterialTheme.colorScheme.surface,
-                            windowInsets = WindowInsets.navigationBars
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                                .padding(vertical = 8.dp)
                         ) {
-                            bottomBarDestinations.forEach { dest ->
+                            AppDestination.entries.forEach { dest ->
                                 val selected = currentDestination == dest
-                                NavigationBarItem(
+                                NavigationRailItem(
                                     selected = selected,
                                     onClick = { viewModel.navigateTo(dest) },
                                     icon = { Icon(destinationIcon(dest), contentDescription = dest.title) },
                                     label = { Text(dest.shortTitle, maxLines = 1) },
-                                    colors = NavigationBarItemDefaults.colors(
+                                    colors = NavigationRailItemDefaults.colors(
                                         selectedIconColor = LslForestGreen,
                                         selectedTextColor = LslForestGreen,
                                         indicatorColor = LslMintTint
                                     ),
-                                    modifier = Modifier.testTag("bottom_nav_${dest.name.lowercase()}")
+                                    modifier = Modifier.testTag("nav_rail_${dest.name.lowercase()}")
                                 )
                             }
                         }
+                        mainContent(Modifier.weight(1f))
                     }
-                ) { innerPadding ->
-                    mainContent(Modifier.padding(innerPadding))
+                }
+            }
+
+            else -> {
+                // Compact Mobile Layout: ModalNavigationDrawer (all 8 menu items) + Bottom NavigationBar
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet(
+                            modifier = Modifier.width(290.dp),
+                            drawerContainerColor = MaterialTheme.colorScheme.surface
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(LslForestGreenDark)
+                                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = settings.companyName.uppercase(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = LslPureWhite.copy(alpha = 0.8f)
+                                )
+                                Text(
+                                    text = "LSL PO Manager",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = LslPureWhite
+                                )
+                                Text(
+                                    text = user.email ?: "Merchandiser Workspace",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = LslPureWhite.copy(alpha = 0.75f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                AppDestination.entries.forEachIndexed { idx, dest ->
+                                    val selected = currentDestination == dest
+                                    NavigationDrawerItem(
+                                        label = { Text("${idx + 1}. ${dest.title}") },
+                                        selected = selected,
+                                        onClick = {
+                                            viewModel.navigateTo(dest)
+                                            scope.launch { drawerState.close() }
+                                        },
+                                        icon = { Icon(destinationIcon(dest), contentDescription = dest.title) },
+                                        colors = NavigationDrawerItemDefaults.colors(
+                                            selectedContainerColor = LslMintTint,
+                                            selectedIconColor = LslForestGreen,
+                                            selectedTextColor = LslForestGreen
+                                        ),
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 2.dp)
+                                            .testTag("drawer_nav_${dest.name.lowercase()}")
+                                    )
+                                    if (idx == 4) {
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Scaffold(
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        topBar = {
+                            TopAppBar(
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = { scope.launch { drawerState.open() } },
+                                        modifier = Modifier.testTag("open_navigation_drawer_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Menu,
+                                            contentDescription = "Open LSL Navigation Menu",
+                                            tint = LslPureWhite
+                                        )
+                                    }
+                                },
+                                title = {
+                                    Column {
+                                        Text(
+                                            text = currentDestination.title,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = settings.companyName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = LslPureWhite.copy(alpha = 0.82f)
+                                        )
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = LslForestGreen,
+                                    titleContentColor = LslPureWhite
+                                )
+                            )
+                        },
+                        bottomBar = {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                windowInsets = WindowInsets.navigationBars
+                            ) {
+                                bottomBarDestinations.forEach { dest ->
+                                    val selected = currentDestination == dest
+                                    NavigationBarItem(
+                                        selected = selected,
+                                        onClick = { viewModel.navigateTo(dest) },
+                                        icon = { Icon(destinationIcon(dest), contentDescription = dest.title) },
+                                        label = { Text(dest.shortTitle, maxLines = 1) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = LslForestGreen,
+                                            selectedTextColor = LslForestGreen,
+                                            indicatorColor = LslMintTint
+                                        ),
+                                        modifier = Modifier.testTag("bottom_nav_${dest.name.lowercase()}")
+                                    )
+                                }
+                            }
+                        }
+                    ) { innerPadding ->
+                        mainContent(Modifier.padding(innerPadding))
+                    }
                 }
             }
         }

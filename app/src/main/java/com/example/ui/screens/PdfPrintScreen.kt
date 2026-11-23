@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -73,6 +74,7 @@ import java.io.File
 fun PdfPrintScreen(
     activeState: ActivePoState,
     companyName: String,
+    isLaptopScreen: Boolean = false,
     onGoToUpload: () -> Unit,
     onGoToSavedPos: () -> Unit,
     onSavePo: () -> Unit,
@@ -109,7 +111,7 @@ fun PdfPrintScreen(
         try {
             val (file, bitmaps) = withContext(Dispatchers.IO) {
                 val f = PdfAndPrintEngine.generatePreviewPdfFile(context, po, companyName)
-                val pages = PdfAndPrintEngine.renderPdfPreviewBitmaps(f, scale = 1.5f)
+                val pages = PdfAndPrintEngine.renderPdfPreviewBitmaps(f, scale = 1.6f)
                 f to pages
             }
             previewPdfFile = file
@@ -161,167 +163,200 @@ fun PdfPrintScreen(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        // Controls Card with the 4 required separate buttons: Export Excel, Export PDF, Print PO, Save PO
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("A4 Landscape PDF & Direct Print", style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                text = "PO ${po.poNumber}  •  ${po.buyerName}  •  ${previewPages.size} page(s)",
-                                style = MonoNumericStyle.copy(fontWeight = FontWeight.Bold),
-                                color = LslForestGreen
-                            )
-                        }
-                        PoStatusBadge(status = po.status)
-                    }
-
-                    Text(
-                        text = "Formatted for A4 Landscape with LAILA STYLES LIMITED masthead, repeating table headers on every page, margins, page numbers, and zero cut-off columns.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { createExcelLauncher.launch("LSL_PO_${safePoNum}_Breakdown.xlsx") },
-                            modifier = Modifier.testTag("pdf_screen_export_excel_button"),
-                            colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
-                        ) {
-                            Icon(Icons.Outlined.TableView, contentDescription = "Export Excel", modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Export Excel")
-                        }
-
-                        Button(
-                            onClick = { createPdfLauncher.launch("LSL_PO_${safePoNum}_Report.pdf") },
-                            modifier = Modifier.testTag("pdf_screen_export_pdf_button"),
-                            colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
-                        ) {
-                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF", modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Export PDF")
-                        }
-
-                        Button(
-                            onClick = {
-                                PdfAndPrintEngine.printPurchaseOrder(context, po, companyName)
-                                onAuditEvent(AuditAction.PRINTED, "Sent PO ${po.poNumber} to Android A4 Landscape Print Spooler.")
-                            },
-                            modifier = Modifier.testTag("pdf_screen_print_po_button"),
-                            colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
-                        ) {
-                            Icon(Icons.Outlined.Print, contentDescription = "Print PO", modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Print PO")
-                        }
-
-                        OutlinedButton(
-                            onClick = onSavePo,
-                            enabled = !activeState.isSaving,
-                            modifier = Modifier.testTag("pdf_screen_save_po_button")
-                        ) {
-                            Icon(Icons.Outlined.Save, contentDescription = "Save PO", modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Save PO")
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                val file = previewPdfFile ?: return@OutlinedButton
-                                try {
-                                    val uri = FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
-                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "application/pdf"
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        putExtra(Intent.EXTRA_SUBJECT, "LSL PO ${po.poNumber} PDF Report")
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(Intent.createChooser(intent, "Share LSL PO PDF"))
-                                } catch (e: Exception) {
-                                    onShowMessage("Share PDF failed: ${e.localizedMessage}")
-                                }
-                            },
-                            enabled = previewPdfFile != null
-                        ) {
-                            Icon(Icons.Outlined.Share, contentDescription = "Share PDF", modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Share PDF")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Live Multi-Page A4 Landscape Print Preview
-        item {
-            Text("Print Preview (A4 Landscape)", style = MaterialTheme.typography.titleMedium)
-        }
-
-        if (isRenderingPreview) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CircularProgressIndicator(color = LslForestGreen)
-                        Text("Rendering A4 Landscape print preview…", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        } else {
-            itemsIndexed(previewPages) { index, bitmap ->
-                Card(
+    val controlsCard: @Composable () -> Unit = {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("A4 Landscape PDF & Print", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            text = "Page ${index + 1} of ${previewPages.size}  (A4 Landscape • 297 × 210 mm)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "PO ${po.poNumber}  •  ${po.buyerName}  •  ${previewPages.size} page(s)",
+                            style = MonoNumericStyle.copy(fontWeight = FontWeight.Bold),
+                            color = LslForestGreen
                         )
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "PDF Preview Page ${index + 1}",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(842f / 595f)
-                        )
+                    }
+                    PoStatusBadge(status = po.status)
+                }
+
+                Text(
+                    text = "Formatted for A4 Landscape with LAILA STYLES LIMITED masthead, repeating table headers on every page, margins, page numbers, and zero cut-off columns.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { createExcelLauncher.launch("LSL_PO_${safePoNum}_Breakdown.xlsx") },
+                        modifier = Modifier.testTag("pdf_screen_export_excel_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
+                    ) {
+                        Icon(Icons.Outlined.TableView, contentDescription = "Export Excel", modifier = Modifier.size(17.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Export Excel")
+                    }
+
+                    Button(
+                        onClick = { createPdfLauncher.launch("LSL_PO_${safePoNum}_Report.pdf") },
+                        modifier = Modifier.testTag("pdf_screen_export_pdf_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
+                    ) {
+                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF", modifier = Modifier.size(17.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Export PDF")
+                    }
+
+                    Button(
+                        onClick = {
+                            PdfAndPrintEngine.printPurchaseOrder(context, po, companyName)
+                            onAuditEvent(AuditAction.PRINTED, "Sent PO ${po.poNumber} to A4 Landscape Print Spooler.")
+                        },
+                        modifier = Modifier.testTag("pdf_screen_print_po_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = LslForestGreen)
+                    ) {
+                        Icon(Icons.Outlined.Print, contentDescription = "Print PO", modifier = Modifier.size(17.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Print PO")
+                    }
+
+                    OutlinedButton(
+                        onClick = onSavePo,
+                        enabled = !activeState.isSaving,
+                        modifier = Modifier.testTag("pdf_screen_save_po_button")
+                    ) {
+                        Icon(Icons.Outlined.Save, contentDescription = "Save PO", modifier = Modifier.size(17.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Save PO")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val file = previewPdfFile ?: return@OutlinedButton
+                            try {
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_SUBJECT, "LSL PO ${po.poNumber} PDF Report")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Share LSL PO PDF"))
+                            } catch (e: Exception) {
+                                onShowMessage("Share PDF failed: ${e.localizedMessage}")
+                            }
+                        },
+                        enabled = previewPdfFile != null
+                    ) {
+                        Icon(Icons.Outlined.Share, contentDescription = "Share PDF", modifier = Modifier.size(17.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Share PDF")
                     }
                 }
             }
         }
+    }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+    if (isLaptopScreen) {
+        // Two-Pane Laptop Print Studio
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(0.36f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                controlsCard()
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.64f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item { Text("Print Preview (A4 Landscape)", style = MaterialTheme.typography.titleMedium) }
+                if (isRenderingPreview) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().height(260.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = LslForestGreen)
+                        }
+                    }
+                } else {
+                    itemsIndexed(previewPages) { index, bitmap ->
+                        PreviewPageCard(index = index, total = previewPages.size, bitmap = bitmap)
+                    }
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item { controlsCard() }
+            item { Text("Print Preview (A4 Landscape)", style = MaterialTheme.typography.titleMedium) }
+            if (isRenderingPreview) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            CircularProgressIndicator(color = LslForestGreen)
+                            Text("Rendering A4 Landscape print preview…", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            } else {
+                itemsIndexed(previewPages) { index, bitmap ->
+                    PreviewPageCard(index = index, total = previewPages.size, bitmap = bitmap)
+                }
+            }
+            item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun PreviewPageCard(index: Int, total: Int, bitmap: Bitmap) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Page ${index + 1} of $total  (A4 Landscape • 297 × 210 mm)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "PDF Preview Page ${index + 1}",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(842f / 595f)
+            )
+        }
     }
 }
